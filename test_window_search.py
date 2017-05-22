@@ -29,7 +29,7 @@ hist_bins = 16    # Number of histogram bins
 spatial_feat = True # Spatial features on or off
 hist_feat = True # Histogram features on or off
 hog_feat = True # HOG features on or off
-y_start_stop = [360, 720] # Min and max in y to search in slide_window()
+y_start_stop = [450, 720] # Min and max in y to search in slide_window()
 
 t0=time.time()
 car_features = helper.extract_features(cars, color_space=color_space,
@@ -86,10 +86,13 @@ draw_image = np.copy(image)
 # Uncomment the following line if you extracted training
 # data from .png images (scaled 0 to 1 by mpimg) and the
 # image you are searching is a .jpg (scaled 0 to 255)
-image = image.astype(np.float32)/255
+image = helper.normalize(image, 'matplotlib', 'jpg')
 
-windows = helper.slide_window(image, x_start_stop=[None, None], y_start_stop=y_start_stop,
-                    xy_window=(96, 96), xy_overlap=(0.5, 0.5))
+windows = helper.slide_window(image,
+                              x_start_stop=[None, None],
+                              y_start_stop=y_start_stop,
+                              xy_window=(96, 96),
+                              xy_overlap=(0.5, 0.5))
 
 hot_windows = helper.search_windows(image, windows, svc, X_scaler, color_space=color_space,
                         spatial_size=spatial_size, hist_bins=hist_bins,

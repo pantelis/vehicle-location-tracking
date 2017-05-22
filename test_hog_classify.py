@@ -9,6 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import helper
 import os
+import pickle
 
 car_classify_data_dir = '../datasets/udacity-vehicle-tracking'
 
@@ -18,21 +19,25 @@ notcars = []
 cars = helper.list_files(os.path.join(car_classify_data_dir, 'vehicles'))
 notcars = helper.list_files(os.path.join(car_classify_data_dir, 'non-vehicles'))
 
-# TODO play with these values to see how your classifier
+# Play with these values to see how your classifier
 colorspace = 'RGB' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
 orient = 9
 pix_per_cell = 8
 cell_per_block = 2
 hog_channel = 0 # Can be 0, 1, 2, or "ALL"
+spatial_feat = True
+hist_feat = True
+hog_feat = True
 
-car_features = helper.extract_features(cars, color_space='RGB',
+car_features = helper.extract_features(cars, color_space=colorspace,
                         orient=orient,
                         pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, hog_channel=hog_channel,
-                        spatial_feat=True, hist_feat=True, hog_feat=True)
-notcar_features = helper.extract_features(notcars, color_space='RGB',
+                        spatial_feat=spatial_feat, hist_feat=hist_feat, hog_feat=hog_feat)
+notcar_features = helper.extract_features(notcars, color_space=colorspace,
                         orient=orient,
                         pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, hog_channel=hog_channel,
-                        spatial_feat=True, hist_feat=True, hog_feat=True)
+                        spatial_feat=spatial_feat, hist_feat=hist_feat, hog_feat=hog_feat)
+
 
 # Create an array stack of feature vectors
 X = np.vstack((car_features, notcar_features)).astype(np.float64)
@@ -51,8 +56,8 @@ rand_state = np.random.randint(0, 100)
 X_train, X_test, y_train, y_test = train_test_split(
     scaled_X, y, test_size=0.2, random_state=rand_state)
 
-print('Using:',orient,'orientations',pix_per_cell,
-    'pixels per cell and', cell_per_block,'cells per block')
+print('Using:', orient, 'orientations', pix_per_cell,
+    'pixels per cell and', cell_per_block, 'cells per block')
 
 print('Feature vector length:', len(X_train[0]))
 
