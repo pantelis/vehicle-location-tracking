@@ -21,7 +21,7 @@ config.read('config.ini')
 car_classify_data_dir = config['Classifier']['car_classify_data_dir']
 features_filename = config['FeaturesGenerator']['features_filename']
 model_filename = config['Classifier']['model_filename']
-parameters = {}
+
 
 if __name__ == "__main__":
 
@@ -149,37 +149,43 @@ if __name__ == "__main__":
         test_directory = './test_images'
         images = glob.glob(os.path.join(test_directory, 'test?.jpg'))
 
-        for fname in images:
-            image = mpimg.imread(fname)
-            detected_vehicles_img = helper.process_image(image, y_start_stop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block,
-                  color_space, spatial_size, hist_bins, spatial_feat, hist_feat, hog_feat)
+        h, axs = plt.subplots(3, 2, figsize=(24, 9))
+        h.tight_layout()
+        axs = axs.ravel()
 
-            h, ((h1, h2), (h3, h4)) = plt.subplots(6, 2, figsize=(24, 9))
-            h.tight_layout()
-            h1.imshow(cv2.cvtColor(undistorted, cv2.COLOR_BGR2RGB))
-            h1.set_title('Original', fontsize=20)
-            h2.imshow(combined_binary)
-            h2.set_title('Binary', fontsize=20)
-            h3.imshow(binary_warped)
-            h3.set_title('Warped', fontsize=20)
-            h4.imshow(lined_img)
-            h4.set_title('Detected Lanes', fontsize=20)
-            plt.subplots_adjust(left=0., right=1, top=0.9, bottom=0.)
-            plt.show()
-            plt.savefig(os.path.join(test_directory, 'hog.jpg'), bbox_inches='tight')
+        for fname, i in zip(images, range(len(images))):
+            image = mpimg.imread(fname)
+            detected_vehicles_img = helper.process_image(image, config['FeaturesGenerator']['colorspace_conv'],
+                                            literal_eval(config['Test']['y_start_stop']),
+                                            float(config['Test']['scale']), svc, X_scaler, orient, pix_per_cell,
+                                            cell_per_block, spatial_size, hist_bins,
+                                            config['FeaturesGenerator']['hog_channels'], spatial_feat,
+                                            hist_feat, hog_feat)
+            axs[i].imshow(detected_vehicles_img)
+            axs[i].set_title(fname)
+            plt.savefig(os.path.join(test_directory, 'detection_output.jpg'), bbox_inches='tight')
+        plt.show()
 
     elif config['Project']['media_type'] == 'video':
 
         videos_filenames = ['test_video.mp4', './project_video.mp4']
+        t100 = time.time()
 
         for fname in videos_filenames:
             # read the project video
             project_video_clip = VideoFileClip(fname)
             project_video_output_fname = 'output_' + os.path.basename(fname)
 
-            output_clip = project_video_clip.fx(helper.process_video, parameters)
+            output_clip = project_video_clip.fx(helper.process_video, config['FeaturesGenerator']['colorspace_conv'],
+                                            literal_eval(config['Test']['y_start_stop']),
+                                            float(config['Test']['scale']), svc, X_scaler, orient, pix_per_cell,
+                                            cell_per_block, spatial_size, hist_bins,
+                                            config['FeaturesGenerator']['hog_channels'], spatial_feat,
+                                            hist_feat, hog_feat)
 
             output_clip.write_videofile(project_video_output_fname, audio=False)
 
+        t110 = time.time()
+        print(round(t110 - t100, 2), 'Seconds to process the videos ...')
 
 
