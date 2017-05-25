@@ -7,6 +7,8 @@ from ast import literal_eval
 import numpy as np
 import cv2
 from skimage.feature import hog
+from collections import deque
+import itertools
 
 # iterate over subfolders of a dir and create a list of files
 def list_files(directory):
@@ -15,6 +17,25 @@ def list_files(directory):
         for name in files:
             r.append(os.path.join(root, name))
     return r
+
+
+# union of two boxes
+def union(a, b):
+  x = min(a[0], b[0])
+  y = min(a[1], b[1])
+  w = max(a[0]+a[2], b[0]+b[2]) - x
+  h = max(a[1]+a[3], b[1]+b[3]) - y
+  return (x, y, w, h)
+
+
+# intersection of two  boxes
+def intersection(a, b):
+  x = max(a[0], b[0])
+  y = max(a[1], b[1])
+  w = min(a[0]+a[2], b[0]+b[2]) - x
+  h = min(a[1]+a[3], b[1]+b[3]) - y
+  if w<0 or h<0: return () # or (0,0,0,0) ?
+  return (x, y, w, h)
 
 
 def convert_color(img, conv='RGB2YCrCb'):
@@ -271,14 +292,52 @@ def search_windows(img, colorspace_conv, windows, clf, scaler, color_space='RGB'
     return on_windows
 
 
-# Define a function to draw bounding boxes
-def draw_boxes(img, bboxes, color=(0, 0, 255), thick=6):
+def group_boxes(img, input_boxes, color=(0, 0, 255), thick=6):
     # Make a copy of the image
     imcopy = np.copy(img)
-    # Iterate through the bounding boxes
-    for bbox in bboxes:
+    # print(input_boxes)
+
+    # group boxes only when at least one input one was found
+    if len(input_boxes) > 1:
+        
+        boxes = np.array(input_boxes).reshape(-1, 4).squeeze()
+        # print(boxes)
+
+        # apply the groupRectangles cv2 function
+        grouped_boxes, weight = cv2.groupRectangles(boxes.tolist(), 1, 0.2)
+        # print(grouped_boxes)
+
+        # if at least one grouped box was produced,
+        if np.array(grouped_boxes).size:
+            num_boxes = grouped_boxes.size // 4
+            # Iterate through the grouped boxes
+            for k in range(num_boxes):
+                box = grouped_boxes[k].reshape(-1, 2).tolist()
+                # Draw a rectangle given bbox coordinates
+                cv2.rectangle(imcopy, tuple(box[0]), tuple(box[1]), color, thick)
+        else:
+            # if grouped_boxes is empty calculate the union of input_boxes
+            grouped_boxes = input_boxes
+            imcopy = draw_boxes(img, grouped_boxes, color=(0, 0, 255), thick=6)
+            print('group boxes is empty but there are ', len(input_boxes), 'input_boxes')
+    else:
+        imcopy = draw_boxes(img, input_boxes, color=(0, 0, 255), thick=6)
+        print('Input boxes = ', len(input_boxes))
+
+    # Return the image copy with boxes drawn
+    return imcopy
+
+
+# Define a function to draw bounding boxes
+def draw_boxes(img, input_bboxes, color=(0, 0, 255), thick=6):
+
+    # Make a copy of the image
+    imcopy = np.copy(img)
+
+    for bbox in input_bboxes:
         # Draw a rectangle given bbox coordinates
         cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
+
     # Return the image copy with boxes drawn
     return imcopy
 
@@ -297,7 +356,7 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
     :param orient: 
     :param pix_per_cell: 
     :param cell_per_block: 
-    :param spatial_size: 
+    :param spatial_size: color=(0, 0, 255), thick=6
     :param hist_bins: 
     :return: 
 
@@ -306,7 +365,7 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
     img = img.astype(np.float32) / 255
 
     img_tosearch = img[ystart:ystop, :, :]
-    ctrans_tosearch = helper.convert_color(img_tosearch, conv='RGB2YCrCb')
+    ctrans_tosearch = convert_color(img_tosearch, conv='RGB2YCrCb')
 
     if scale != 1:
         imshape = ctrans_tosearch.shape
@@ -391,6 +450,7 @@ def process_image(image, colorspace_conv, y_start_stop, scale, svc, X_scaler, or
                                     hog_channels=hog_channels, spatial_feat=spatial_feat,
                                     hist_feat=hist_feat, hog_feat=hog_feat)
 
+    #window_img = group_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=6)
     window_img = draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=6)
 
     return window_img

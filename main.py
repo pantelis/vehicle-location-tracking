@@ -3,7 +3,6 @@ from moviepy.editor import VideoFileClip
 import glob
 import os
 import helper
-import cv2
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import pickle
@@ -14,6 +13,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.externals import joblib
 import time
 from ast import literal_eval
+from collections import deque
 
 # Parameters
 config = configparser.ConfigParser()
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     if config.get('Project', 'media_type') == 'images':
 
         test_directory = './test_images'
-        images = glob.glob(os.path.join(test_directory, 'test?.jpg'))
+        images = glob.glob(os.path.join(test_directory, 'test1.jpg'))
 
         h, axs = plt.subplots(3, 2, figsize=(24, 9))
         h.tight_layout()
@@ -168,22 +168,22 @@ if __name__ == "__main__":
 
     elif config['Project']['media_type'] == 'video':
 
-        videos_filenames = ['test_video.mp4', './project_video.mp4']
+        videos_filenames = ['./test_video.mp4', './project_video.mp4']
         t100 = time.time()
 
         for fname in videos_filenames:
             # read the project video
-            project_video_clip = VideoFileClip(fname)
-            project_video_output_fname = 'output_' + os.path.basename(fname)
+            video_clip = VideoFileClip(fname)
+            video_output_fname = 'output_' + os.path.basename(fname)
 
-            output_clip = project_video_clip.fx(helper.process_video, config['FeaturesGenerator']['colorspace_conv'],
+            output_clip = video_clip.fx(helper.process_video, config['FeaturesGenerator']['colorspace_conv'],
                                             literal_eval(config['Test']['y_start_stop']),
                                             float(config['Test']['scale']), svc, X_scaler, orient, pix_per_cell,
                                             cell_per_block, spatial_size, hist_bins,
                                             config['FeaturesGenerator']['hog_channels'], spatial_feat,
                                             hist_feat, hog_feat)
 
-            output_clip.write_videofile(project_video_output_fname, audio=False)
+            output_clip.write_videofile(video_output_fname, audio=False)
 
         t110 = time.time()
         print(round(t110 - t100, 2), 'Seconds to process the videos ...')
