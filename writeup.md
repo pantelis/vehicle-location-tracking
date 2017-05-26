@@ -22,9 +22,8 @@ This project detects vehicles using video cameras only. The steps of the process
 [cutout1]: ./test_images/cutout1.jpg
 [hog_output]: ./test_images/hog_output.jpg
 [3d_color_conversion]: ./test_images/3d_color_conversion.png
-[image6]: ./examples/labels_map.png
-[image7]: ./examples/output_bboxes.png
-[video1]: ./project_video.mp4
+[detection_output]: ./test_images/detection_output.jpg
+[project_video_output]: https://youtu.be/n89TnDt3AQY "Outpout of Project Video"
 
 ## Pipeline
 The pipeline is driven by a ```config.ini``` file that contains all the configuration parameters and the ```main.py``` that produces all results. 
@@ -250,56 +249,76 @@ The SVM classifier was trained using the extracted and stored features as shown 
 ```
 Randomization of test and training datasets was done and a the linear SVM achieved 99.75% accuracy on the test dataset (20% of the dataset). Both SVM and Scaler models are also stored to avoid re-running the training at every experimental step. 
 
-###Sliding Window Search
+#### Sliding Window Search
+The sliding window search is shown below. As intuitively can be understood we limited the search to the bottom section of the frame as manifested by the ```y_start_stop = [400, 720]``` parameter. The cell size was selected to be (8,8) pixels and the block size was (2,2) cells. The overlap was selected at 50%. 
 
-####1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
+````python
 
-I decided to search random window positions at random scales all over the image and came up with this (ok just kidding I didn't actually ;):
+def slide_window(img, x_start_stop=[None, None], y_start_stop=[None, None],
+                    xy_window=(64, 64), xy_overlap=(0.5, 0.5)):
+    # If x and/or y start/stop positions not defined, set to image size
+    if x_start_stop[0] == None:
+        x_start_stop[0] = 0
+    if x_start_stop[1] == None:
+        x_start_stop[1] = img.shape[1]
+    if y_start_stop[0] == None:
+        y_start_stop[0] = 0
+    if y_start_stop[1] == None:
+        y_start_stop[1] = img.shape[0]
+    # Compute the span of the region to be searched
+    xspan = x_start_stop[1] - x_start_stop[0]
+    yspan = y_start_stop[1] - y_start_stop[0]
+    # Compute the number of pixels per step in x/y
+    nx_pix_per_step = np.int(xy_window[0]*(1 - xy_overlap[0]))
+    ny_pix_per_step = np.int(xy_window[1]*(1 - xy_overlap[1]))
+    # Compute the number of windows in x/y
+    nx_buffer = np.int(xy_window[0]*(xy_overlap[0]))
+    ny_buffer = np.int(xy_window[1]*(xy_overlap[1]))
+    nx_windows = np.int((xspan-nx_buffer)/nx_pix_per_step)
+    ny_windows = np.int((yspan-ny_buffer)/ny_pix_per_step)
+    # Initialize a list to append window positions to
+    window_list = []
+    # Loop through finding x and y window positions
+    # Note: you could vectorize this step, but in practice
+    # you'll be considering windows one by one with your
+    # classifier, so looping makes sense
+    for ys in range(ny_windows):
+        for xs in range(nx_windows):
+            # Calculate window position
+            startx = xs*nx_pix_per_step + x_start_stop[0]
+            endx = startx + xy_window[0]
+            starty = ys*ny_pix_per_step + y_start_stop[0]
+            endy = starty + xy_window[1]
+            # Append window position to list
+            window_list.append(((startx, starty), (endx, endy)))
+    # Return the list of windows
+    return window_list
+````
+By configuring the ```config.ini``` such that we perform vehicle detection on test images instead of the project video, we can get the following images that show the positive detections in 6 test images. You can see multiple overlapping windows placed in the two cars. In most cases the darker colored car attracted more detection windows than white car while at the same time in one occasion a false alarm can also be observed since a vehicle was detected in the opposite stream. 
+ 
+![detection_output][detection_output]
 
-![alt text][image3]
-
-####2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
-
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
-
-![alt text][image4]
-
-
----
 
 ### Video Implementation
 
 ####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
-Here's a [link to my video result](./project_video.mp4)
-
+https://youtu.be/
+[![project_video_output](https://img.youtube.com/vi/n89TnDt3AQY/0.jpg)](https://youtu.be/n89TnDt3AQY)
 
 ####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
+I recorded the positions of positive detections in each frame of the video. A different method than heatmap generation was adopted. In our method the multiple positive windows are fed into a ```deque``` data structure. The structure stored the latest ```filter_span``` frames. All positive windows across the ```filter_span=10``` frames are input to the ```cv2.groupRectangles``` function. This function forms clusters depending on the setting of its parameters. We have determined that the optimal set of parameters are as follows:
 
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
-
-
-The implementation is functional i.e. no OO design practices have been used such as classes to store the state of the detected vehicles. Because of that we do need to make use of  
-
-
-### Here are six frames and their corresponding heatmaps:
-
-![alt text][image5]
-
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
-
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
-
-
+* groupThreshold = 1. This is the minimum possible number of rectangles minus 1 that need to be present for the grouping to take place. So for example if at least two positives windows per vehicle are present, these windows will be retained and the output will be the **average** window. As a result, unless false detections are persistent, spurious false positives will be eliminated from the output. The video produced a very small number of false positives. 
+* eps = 0.2. This is the relative difference between sides of the rectangles to merge them into a group. 
+For example, if eps=1.0, then clusters of rectangles which effectively are associated with corresponding cars will be merged. This is not desired as each cluster must correspond to one vehicle. In contrast, when eps=0 then all rectangles will be retained and no merging will be performed. 
+The choice of 0.2 has been shown to result in a good tradeoff by experimentation. 
 
 ---
 
-###Discussion
+### Discussion
+The adopted method can be improved significantly as follows by tracking. No concept of memory is present in this implementation other than a time domain filter. One can take the centroids of the positive bounding boxes and based on a distance criterion determine the cluster centers. Merging the centroids without a-priori knowledge of the cluster centers can be done using affinity propagation. The number of exemplars will vary as the number of cars that can be observed vary as well. For example, in the beginning of the video the two close by cars are distinct but then one ocludes the other. In such case there are two examplars in the beginning, then a single examplar and then two exemplars once again. Towards the very end of the video there are three exemplars in fact - as a third car appears in the far right lane. The resulting variable number of centroids can be tracked using a more advanced filter such as a Kalman Filter. As a result, the rectangles are appearing wobbly. 
+  
+2. There is more training work that is needed for bright colored vehicles. There seems to be a bias in the dataset towards darker colored vehicles. Its a problem that can be addressed by more carefully selecting the training dataset. 
 
-####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
-
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
 
