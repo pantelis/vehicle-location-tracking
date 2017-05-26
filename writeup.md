@@ -301,11 +301,11 @@ By configuring the ```config.ini``` such that we perform vehicle detection on te
 
 ### Video Implementation
 
-####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
 https://youtu.be/
 [![project_video_output](https://img.youtube.com/vi/n89TnDt3AQY/0.jpg)](https://youtu.be/n89TnDt3AQY)
 
-####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
+( Click to the image above for the video. )
+
 
 I recorded the positions of positive detections in each frame of the video. A different method than heatmap generation was adopted. In our method the multiple positive windows are fed into a ```deque``` data structure. The structure stored the latest ```filter_span``` frames. All positive windows across the ```filter_span=10``` frames are input to the ```cv2.groupRectangles``` function. This function forms clusters depending on the setting of its parameters. We have determined that the optimal set of parameters are as follows:
 
