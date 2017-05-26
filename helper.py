@@ -58,7 +58,8 @@ def convert_color(img, conv='RGB2YCrCb'):
 # Define a function to return HOG features and visualization
 def get_hog_features(img, orient, pix_per_cell, cell_per_block,
                         vis=False, feature_vec=True):
-    # Call with two outputs if vis==Trange(feature_image.shape[2])rue
+
+    # Call with two outputs if vis==True
     if vis:
         features, hog_image = hog(img, orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
                                   cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=True,
@@ -235,17 +236,17 @@ def single_img_features(img, colorspace_conv, spatial_size=(32, 32),
     feature_image = convert_color(img, conv=colorspace_conv)
 
     # 3) Compute spatial features if flag is set
-    if spatial_feat == True:
+    if spatial_feat:
         spatial_features = bin_spatial(feature_image, size=spatial_size)
         # 4) Append features to list
         img_features.append(spatial_features)
     # 5) Compute histogram features if flag is set
-    if hist_feat == True:
+    if hist_feat:
         hist_features = color_hist(feature_image, nbins=hist_bins)
         # 6) Append features to list
         img_features.append(hist_features)
     # 7) Compute HOG features if flag is set
-    if hog_feat == True:
+    if hog_feat:
         hog_features=[]
         for channel in literal_eval(hog_channels):
             hog_features.append(get_hog_features(feature_image[:, :, channel], orient, pix_per_cell, cell_per_block,
@@ -295,17 +296,14 @@ def search_windows(img, colorspace_conv, windows, clf, scaler, color_space='RGB'
 def group_boxes(img, input_boxes, color=(0, 0, 255), thick=6):
     # Make a copy of the image
     imcopy = np.copy(img)
-    # print(input_boxes)
 
     # group boxes only when at least one input one was found
     if len(input_boxes) > 1:
-        
+
         boxes = np.array(input_boxes).reshape(-1, 4).squeeze()
-        # print(boxes)
 
         # apply the groupRectangles cv2 function
         grouped_boxes, weight = cv2.groupRectangles(boxes.tolist(), 1, 0.2)
-        # print(grouped_boxes)
 
         # if at least one grouped box was produced,
         if np.array(grouped_boxes).size:
@@ -319,10 +317,10 @@ def group_boxes(img, input_boxes, color=(0, 0, 255), thick=6):
             # if grouped_boxes is empty calculate the union of input_boxes
             grouped_boxes = input_boxes
             imcopy = draw_boxes(img, grouped_boxes, color=(0, 0, 255), thick=6)
-            print('group boxes is empty but there are ', len(input_boxes), 'input_boxes')
+            # print('group boxes is empty but there are ', len(input_boxes), 'input_boxes')
     else:
         imcopy = draw_boxes(img, input_boxes, color=(0, 0, 255), thick=6)
-        print('Input boxes = ', len(input_boxes))
+        # print('Input boxes = ', len(input_boxes))
 
     # Return the image copy with boxes drawn
     return imcopy
@@ -429,9 +427,12 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
 
 
 def process_image(image, colorspace_conv, y_start_stop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block,
-                  spatial_size, hist_bins, hog_channels, spatial_feat, hist_feat, hog_feat):
+                  spatial_size, hist_bins, hog_channels, spatial_feat, hist_feat, hog_feat, group_rectangles_flag):
 
     draw_image = np.copy(image)
+
+    # this is deque-based data structure that keeps desired state for a number of frames (filter span)
+    global temporal_filter
 
     # Extracted training data from .png images (scaled 0 to 1 by mpimg) and the
     # image used in the test dataset are .jpg (scaled 0 to 255)
@@ -450,20 +451,27 @@ def process_image(image, colorspace_conv, y_start_stop, scale, svc, X_scaler, or
                                     hog_channels=hog_channels, spatial_feat=spatial_feat,
                                     hist_feat=hist_feat, hog_feat=hog_feat)
 
-    #window_img = group_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=6)
-    window_img = draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=6)
+    # temporal filter stores the last filter_span number of frames
+    temporal_filter.append(hot_windows)
+
+    # the cv2.groupRectangles determines the clusters (potentially different cars) and
+    # estimates the average bounding box for each cluster after rejecting outliers.
+    if group_rectangles_flag:
+        window_img = group_boxes(draw_image, temporal_filter[2], color=(0, 0, 255), thick=6)
+    else:
+        window_img = draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=6)
 
     return window_img
 
 
 def process_video(clip, colorspace_conv, y_start_stop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block,
-                  spatial_size, hist_bins, hog_channels, spatial_feat, hist_feat, hog_feat):
+                  spatial_size, hist_bins, hog_channels, spatial_feat, hist_feat, hog_feat, group_rectangles_flag):
 
     def detect_vehicles_video(image):
 
         detection_output_img = process_image(image, colorspace_conv, y_start_stop, scale, svc, X_scaler, orient,
                                              pix_per_cell, cell_per_block, spatial_size, hist_bins,
-                                             hog_channels, spatial_feat, hist_feat, hog_feat)
+                                             hog_channels, spatial_feat, hist_feat, hog_feat, group_rectangles_flag)
 
         return detection_output_img
 

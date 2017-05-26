@@ -160,7 +160,7 @@ if __name__ == "__main__":
                                             float(config['Test']['scale']), svc, X_scaler, orient, pix_per_cell,
                                             cell_per_block, spatial_size, hist_bins,
                                             config['FeaturesGenerator']['hog_channels'], spatial_feat,
-                                            hist_feat, hog_feat)
+                                            hist_feat, hog_feat, config['Test']['group_rectangles_flag'])
             axs[i].imshow(detected_vehicles_img)
             axs[i].set_title(fname)
             plt.savefig(os.path.join(test_directory, 'detection_output.jpg'), bbox_inches='tight')
@@ -171,7 +171,14 @@ if __name__ == "__main__":
         videos_filenames = ['./test_video.mp4', './project_video.mp4']
         t100 = time.time()
 
+        filter_span = config['Test'].getint('filter_span')
+        helper.temporal_filter = deque([], maxlen=filter_span)
+
         for fname in videos_filenames:
+
+            for i in range(1, filter_span):
+                helper.temporal_filter.append([])
+
             # read the project video
             video_clip = VideoFileClip(fname)
             video_output_fname = 'output_' + os.path.basename(fname)
@@ -181,7 +188,7 @@ if __name__ == "__main__":
                                             float(config['Test']['scale']), svc, X_scaler, orient, pix_per_cell,
                                             cell_per_block, spatial_size, hist_bins,
                                             config['FeaturesGenerator']['hog_channels'], spatial_feat,
-                                            hist_feat, hog_feat)
+                                            hist_feat, hog_feat, config['Test']['group_rectangles_flag'])
 
             output_clip.write_videofile(video_output_fname, audio=False)
 

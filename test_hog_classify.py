@@ -1,42 +1,45 @@
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
-import cv2
-import glob
 import time
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import helper
 import os
-import pickle
+import configparser
 
 car_classify_data_dir = '../datasets/udacity-vehicle-tracking'
 
+config = configparser.ConfigParser()
+config.read('config.ini')
+
 # Read in car and non-car images
-cars = []
-notcars = []
 cars = helper.list_files(os.path.join(car_classify_data_dir, 'vehicles'))
 notcars = helper.list_files(os.path.join(car_classify_data_dir, 'non-vehicles'))
 
 # Play with these values to see how your classifier
-colorspace = 'RGB' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+colorspace_conv = 'RGB2YCrCb' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
 orient = 9
 pix_per_cell = 8
 cell_per_block = 2
-hog_channel = 0 # Can be 0, 1, 2, or "ALL"
-spatial_feat = True
-hist_feat = True
+hog_channel = [0, 1, 2]
+spatial_feat = False
+hist_feat = False
 hog_feat = True
 
-car_features = helper.extract_features(cars, color_space=colorspace,
+
+car_features = helper.extract_features(cars, colorspace_conv=colorspace_conv,
                         orient=orient,
-                        pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, hog_channel=hog_channel,
+                        pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, hog_channels=hog_channel,
                         spatial_feat=spatial_feat, hist_feat=hist_feat, hog_feat=hog_feat)
-notcar_features = helper.extract_features(notcars, color_space=colorspace,
+
+notcar_features = helper.extract_features(notcars, colorspace_conv=colorspace_conv,
                         orient=orient,
-                        pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, hog_channel=hog_channel,
+                        pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, hog_channels=hog_channel,
                         spatial_feat=spatial_feat, hist_feat=hist_feat, hog_feat=hog_feat)
+
+
 
 
 # Create an array stack of feature vectors

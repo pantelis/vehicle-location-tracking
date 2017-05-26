@@ -1,63 +1,254 @@
-##Writeup Template
-###You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
+
+# Vehicle Detection Project
+
+Pantelis Monogioudis
+
+NOKIA
 
 ---
 
-**Vehicle Detection Project**
+This project detects vehicles using video cameras only. The steps of the processing pipeline project are as follows:
 
-The goals / steps of this project are the following:
-
-* Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images and train a classifier Linear SVM classifier
-* Optionally, you can also apply a color transform and append binned color features, as well as histograms of color, to your HOG feature vector. 
-* Note: for those first two steps don't forget to normalize your features and randomize a selection for training and testing.
+* Apply a color transform and spatial histogram  
+* Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images.
+* Append the binned colon features to the HOG features. 
+* Train a Linear SVM classifier using the combines feature vector
 * Implement a sliding-window technique and use your trained classifier to search for vehicles in images.
-* Run your pipeline on a video stream (start with the test_video.mp4 and later implement on full project_video.mp4) and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles.
-* Estimate a bounding box for vehicles detected.
+* Run your pipeline on a video stream and store in a sliding window the binding boxes of detected vehicle segments per frame. Use the groupRectangles function to group clusters of bounding boxes and eliminate outliers.
 
 [//]: # (Image References)
-[image1]: ./examples/car_not_car.png
-[image2]: ./examples/HOG_example.jpg
-[image3]: ./examples/sliding_windows.jpg
-[image4]: ./examples/sliding_window.jpg
-[image5]: ./examples/bboxes_and_heat.png
+[car_not_car]: ./examples/car_not_car.png
+[color_histogram_features]: ./test_images/color_histogram_features.jpg
+[cutout1]: ./test_images/cutout1.jpg
+[hog_output]: ./test_images/hog_output.jpg
+[3d_color_conversion]: ./test_images/3d_color_conversion.png
 [image6]: ./examples/labels_map.png
 [image7]: ./examples/output_bboxes.png
 [video1]: ./project_video.mp4
 
-## [Rubric](https://review.udacity.com/#!/rubrics/513/view) Points
-###Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
+## Pipeline
+The pipeline is driven by a ```config.ini``` file that contains all the configuration parameters and the ```main.py``` that produces all results. 
 
----
-###Writeup / README
+````python
+[Project]
+media_type = video
+regenerate_features = false
+retrain = false
 
-####1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  [Here](https://github.com/udacity/CarND-Vehicle-Detection/blob/master/writeup_template.md) is a template writeup for this project you can use as a guide and a starting point.  
+[Classifier]
+car_classify_data_dir = ../datasets/udacity-vehicle-tracking
+model_filename = svc_vehicle_detection.p
+image_format = png
+# Colorspace conversion can be None or RGB2: HSV, LUV, HLS, YUV, YCrCb
+colorspace_conv = RGB2YCrCb
+ 
+[FeaturesGenerator]
+features_filename = features.p
+spatial_feat = True
+hist_feat = True
+hog_feat = True
+spatial_size = (32, 32)   
+# Number of histogram bins
+hist_bins = 32
+orient = 9
+pix_per_cell = 8
+cell_per_block = 2
+# HOG channels must be a list of up to 3 elements starting from 0: e.g. [0, 1, 2]
+hog_channels = [0,1,2]
 
-You're reading it!
+[Test]
+image_format = jpg
+# limits of car detection in the y-axis
+y_start_stop = [400, 720]
+#
+scale = 1.5
 
-###Histogram of Oriented Gradients (HOG)
+# filter span - in frames
+filter_span = 10
 
-####1. Explain how (and identify where in your code) you extracted HOG features from the training images.
+# group rectangles
+group_rectangles_flag = True
 
-The code for this step is contained in the first code cell of the IPython notebook (or in lines # through # of the file called `some_file.py`).  
+# time domain filter
+time_domain_filter_flag = True
 
-I started by reading in all the `vehicle` and `non-vehicle` images.  Here is an example of one of each of the `vehicle` and `non-vehicle` classes:
+````
 
-![alt text][image1]
+The sections are self evident and their individual parameters control the execution of each step of the pipeline as described below. The other key content in this project is the ``helper.py`` file that contains the vast majority of the functions. 
 
-I then explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`).  I grabbed random images from each of the two classes and displayed them to get a feel for what the `skimage.hog()` output looks like.
+For the input dataset we have used only the vehicle vs non-vehicle files provided by the GTI and KTTI sources.
 
-Here is an example using the `YCrCb` color space and HOG parameters of `orientations=8`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
+### Feature Generation
+
+#### Spatial binning and color histogram extracted features
+The feature extraction state of the pipeline is shown below:
+
+````python
+
+        # Read in each one by one
+        image = mpimg.imread(file)
+
+        # apply color conversion
+        feature_image = convert_color(image, conv=colorspace_conv)
+
+        if spatial_feat:
+            spatial_features = bin_spatial(feature_image, size=spatial_size)
+            file_features.append(spatial_features)
+        if hist_feat:
+            # Apply color_hist()
+            hist_features = color_hist(feature_image, nbins=hist_bins)
+            file_features.append(hist_features)
+        if hog_feat:
+
+            hog_features = []
+
+            for channel in literal_eval(hog_channels):
+                hog_features.append(get_hog_features(feature_image[:, :, channel], orient, pix_per_cell, cell_per_block,
+                                        vis=False, feature_vec=True))
+            hog_features = np.ravel(hog_features)
+
+````
+Features are generated for each of the two classes: vehicle and not vehicle.  
+
+![alt text][car_not_car]
+
+The input images are (64,64) pixels and after color conversion to ```YCrCb```, the ```bin_spatial()``` function converts the images to (32,32). The converted images are aslo binned by the ```color_hist()``` function that produces a histogram of 32 bins per channel. 
+ 
+The output of the histogram for the picture
+ 
+![cutout1][cutout1]
+
+is shown below. 
+
+![color_histogram_features][color_histogram_features]
 
 
-![alt text][image2]
+#### Histogram of Oriented Gradients (HOG) and Parameters
+For the HOG feature extraction step, we have used the paramaters shown in the ```config.ini``` code listing above. The values were the ones suggested as default values. The only exception is the color conversion where YCrCb was selected as it offered better discrimination capability for the test images as shown for example in ```test2.jpg```
+ 
+![3d_color_conversion][3d_color_conversion]
 
-####2. Explain how you settled on your final choice of HOG parameters.
+Here is an example generated by the file ```test_plot_hog.py``` using the `YCrCb` color space and HOG parameters of `orientations=9`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
 
-I tried various combinations of parameters and...
 
-####3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
+![hog_output][hog_output]
 
-I trained a linear SVM using...
+Note that the ```main.py``` includes the possibility of storing the features as shown below. 
+
+```python
+
+
+    t10 = time.time()
+    if config['Project'].getboolean('regenerate_features'):
+        car_images = helper.list_files(os.path.join(car_classify_data_dir, 'vehicles'))
+        notcar_images = helper.list_files(os.path.join(car_classify_data_dir, 'non-vehicles'))
+
+        car_features = helper.extract_features(car_images,
+                                               colorspace_conv=config['FeaturesGenerator']['colorspace_conv'],
+                                               spatial_size=literal_eval(config['FeaturesGenerator']['spatial_size']),
+                                               hist_bins=config['FeaturesGenerator'].getint('hist_bins'),
+                                               orient=config['FeaturesGenerator'].getint('orient'),
+                                               pix_per_cell=config['FeaturesGenerator'].getint('pix_per_cell'),
+                                               cell_per_block=config['FeaturesGenerator'].getint('cell_per_block'),
+                                               hog_channels=config['FeaturesGenerator']['hog_channels'],
+                                               spatial_feat=config['FeaturesGenerator'].getboolean('spatial_feat'),
+                                               hist_feat=config['FeaturesGenerator'].getboolean('hist_feat'),
+                                               hog_feat=config['FeaturesGenerator'].getboolean('hog_feat'))
+
+        notcar_features = helper.extract_features(notcar_images,
+                                                  colorspace_conv=config['FeaturesGenerator']['colorspace_conv'],
+                                                  spatial_size=literal_eval(config['FeaturesGenerator']['spatial_size']),
+                                                  hist_bins=config['FeaturesGenerator'].getint('hist_bins'),
+                                                  orient=config['FeaturesGenerator'].getint('orient'),
+                                                  pix_per_cell=config['FeaturesGenerator'].getint('pix_per_cell'),
+                                                  cell_per_block=config['FeaturesGenerator'].getint('cell_per_block'),
+                                                  hog_channels=config['FeaturesGenerator']['hog_channels'],
+                                                  spatial_feat=config['FeaturesGenerator'].getboolean('spatial_feat'),
+                                                  hist_feat=config['FeaturesGenerator'].getboolean('hist_feat'),
+                                                  hog_feat=config['FeaturesGenerator'].getboolean('hog_feat'))
+
+        features = {}
+        features["car"] = car_features
+        features["notcar"] = notcar_features
+        features["feature_generator_parameters"] = {
+            'spatial_feat': config['FeaturesGenerator']['spatial_feat'],
+            'hist_feat': config['FeaturesGenerator']['hist_feat'],
+            'hog_feat': config['FeaturesGenerator']['hog_feat'],
+            'colorspace_conv': config['FeaturesGenerator']['colorspace_conv'],
+            'spatial_size': config['FeaturesGenerator']['spatial_size'],
+            'hist_bins': config['FeaturesGenerator']['hist_bins'],
+            'orient': config['FeaturesGenerator']['orient'],
+            'pix_per_cell': config['FeaturesGenerator']['pix_per_cell'],
+            'cell_per_block': config['FeaturesGenerator']['cell_per_block'],
+            'hog_channels': config['FeaturesGenerator']['hog_channels']}
+
+        joblib.dump(features, open(os.path.join(car_classify_data_dir, features_filename), 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+
+    else:
+        # read the car features from the pickled dict
+        features = joblib.load(open(os.path.join(car_classify_data_dir, features_filename), 'rb'))
+
+        car_features = features['car']
+        notcar_features = features['notcar']
+
+        feature_generator_parameters = features['feature_generator_parameters']
+        feature_generator_parameters = features['feature_generator_parameters']
+        orient = int(feature_generator_parameters["orient"])
+        pix_per_cell = int(feature_generator_parameters["pix_per_cell"])
+        cell_per_block = int(feature_generator_parameters["cell_per_block"])
+        spatial_size = literal_eval(feature_generator_parameters["spatial_size"])
+        hist_bins = int(feature_generator_parameters["hist_bins"])
+        spatial_feat = bool(feature_generator_parameters['spatial_feat'])
+        hist_feat = bool(feature_generator_parameters['hist_feat'])
+        hog_feat = bool(feature_generator_parameters['hog_feat'])
+        
+```
+#### SVM Classifier Training 
+The SVM classifier was trained using the extracted and stored features as shown below.
+
+```python
+
+ # Training
+    if config['Project'].getboolean('retrain'):
+
+        # Create an array stack of feature vectors
+        X = np.vstack((car_features, notcar_features)).astype(np.float64)
+
+        # Fit a per-column scaler
+        X_scaler = StandardScaler().fit(X)
+
+        # Apply the scaler to X
+        scaled_X = X_scaler.transform(X)
+
+        # Define the labels vector
+        y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
+
+        # Split up data into randomized training and test sets
+        rand_state = np.random.randint(0, 100)
+        X_train, X_test, y_train, y_test = train_test_split(
+            scaled_X, y, test_size=0.2, random_state=rand_state)
+
+        # print('Feature vector length:', len(X_train[0]))
+
+        # Use a linear SVC
+        svc = LinearSVC()
+
+        # Check the training time for the SVC
+        t30 = time.time()
+
+        svc.fit(X_train, y_train)
+        model = {'svc': svc, 'X_scaler': X_scaler}
+
+        t40 = time.time()
+        print(round(t40 - t30, 2), 'Seconds to train SVC...')
+
+        # save the model to disk
+        joblib.dump(model, open(os.path.join(car_classify_data_dir, model_filename), 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+
+        # Check the score of the SVC
+        print('Test Accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
+```
+Randomization of test and training datasets was done and a the linear SVM achieved 99.75% accuracy on the test dataset (20% of the dataset). Both SVM and Scaler models are also stored to avoid re-running the training at every experimental step. 
 
 ###Sliding Window Search
 
@@ -72,6 +263,8 @@ I decided to search random window positions at random scales all over the image 
 Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
 
 ![alt text][image4]
+
+
 ---
 
 ### Video Implementation
@@ -85,6 +278,10 @@ Here's a [link to my video result](./project_video.mp4)
 I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
 
 Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
+
+
+The implementation is functional i.e. no OO design practices have been used such as classes to store the state of the detected vehicles. Because of that we do need to make use of  
+
 
 ### Here are six frames and their corresponding heatmaps:
 

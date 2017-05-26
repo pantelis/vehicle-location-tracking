@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+import os
 
 image = mpimg.imread('./test_images/cutout1.jpg')
 
@@ -40,6 +41,7 @@ if rh is not None:
     plt.xlim(0, 256)
     plt.title('B Histogram')
     fig.tight_layout()
+    plt.savefig(os.path.join('./test_images', 'color_histogram_features.jpg'), bbox_inches='tight')
     plt.show()
 else:
     print('Your function is returning None for at least one variable...')
